@@ -4,7 +4,7 @@ A standalone alcohol label review prototype. Images are read by Tesseract.js's l
 
 ## Run locally
 
-Requires Node.js 20+ and Python 3 (only for the local static server).
+Use a supported Node.js LTS release (Node 24 recommended) and Python 3 for the local static server. Cloudflare deployment does not require Python.
 
 ```sh
 npm ci
@@ -13,7 +13,7 @@ npm test
 npm start
 ```
 
-Open http://localhost:8080. `npm run build` copies the pinned OCR runtime, WASM cores and English language model to the same origin.
+Open http://localhost:8080. Any HTTPS static host can serve `dist/`. `npm run build` copies the pinned OCR runtime, WASM cores and English language model to the same origin. Do not serve this app with file:// URLs.
 
 ## Try it
 
@@ -44,7 +44,7 @@ For your own images, use PNG/JPEG/WebP up to 12 MB and 24 megapixels. Include al
 
 - `dist/app.mjs`: upload validation, session state, OCR worker lifecycle, sample rendering, queue, export and accessible DOM interactions.
 - `dist/engine.mjs`: pure comparison functions and manifest validation.
-- `dist/style.css` / `dist/index.html`: responsive review workspace with a persistent queue and side-by-side artwork / expected values.
+- `dist/style.css` / `dist/index.html`: responsive review workspace with an in-memory session queue and side-by-side artwork / expected values.
 - `scripts/vendor.mjs`: reproducible same-origin OCR asset preparation.
 - `tests/engine.test.mjs`: meaningful regression cases for false matches, mismatches, strict warnings, unit conversion, low confidence and malformed inputs.
 - `tests/benchmark.mjs`: optional real OCR measurement: `node tests/benchmark.mjs /absolute/path/to/label.png`.
@@ -69,7 +69,7 @@ All runtime/model assets are hosted on the app's own origin. Images, application
 
 ## Validation
 
-11 comparison/manifest tests pass. A real 1200 × 1500 synthetic label was run twice using the pinned Tesseract runtime in Node; see `VALIDATION.md` for measured results. This does not establish browser/mobile p95 or the required five-second SLA. Browser visual/end-to-end validation was not available in this execution profile for plain static sites. A feature-detected, read-only WebMCP results tool is provided; live WebMCP validation was unavailable.
+The 11 comparison/manifest tests passed in the development checkout; rerun them against your current repository before deployment. A real 1200 × 1500 synthetic label was run twice using the pinned Tesseract runtime in Node; see `VALIDATION.md` for measured results. This does not establish browser/mobile p95 or the required five-second SLA. Browser visual and end-to-end validation remains outstanding. A feature-detected, read-only WebMCP results tool is provided; live WebMCP validation was unavailable.
 
 ## Explicit limitations and next steps
 
@@ -89,4 +89,28 @@ TTB links to 27 CFR part 16 for the applicable warning regulations. The required
 
 ## Deployment and source delivery
 
-The working version is deployed with Sites and its exact source is committed to the associated managed Git repository. A portable `source.zip` is available from the app footer; it excludes generated OCR assets and node_modules (restore them with `npm ci && npm run build`). To submit through GitHub, unpack it, create your repository, commit and push. Reviewers need access to the deployed Site; check sharing before submitting its URL.
+Source repository: https://github.com/Sidharth4032/label-lens
+
+Deployment target: Cloudflare Workers with static assets. Application processing runs in the browser; no custom server handler, database, or inference API key is needed. This project uses Workers, not Cloudflare Pages.
+
+The Cloudflare deployment has not yet been verified as serving the application. After a successful build, copy the actual production URL from the Cloudflare dashboard into the GitHub repository website field and this README. Do not submit a URL that still displays the default Hello World page.
+
+Configure the Git-connected Worker as follows:
+
+| Setting | Value |
+| --- | --- |
+| Repository | Sidharth4032/label-lens |
+| Production branch | main |
+| Root directory | Repository root (where package.json is located) |
+| Build command | `npm ci && npm test && npm run build` |
+| Deploy command | `npx wrangler deploy --assets ./dist --name label-lens` |
+
+Enable the workers.dev address under the Worker's Domains settings, or configure a custom domain. The deploy command explicitly identifies `dist` as the static asset directory; no additional deployment configuration file is required for this command-based setup. If the repository already contains a Wrangler configuration, inspect it for conflicting settings before deploying.
+
+The build restores OCR runtime files, WebAssembly cores and the English model into `dist/vendor`. Dependencies and generated assets need not be uploaded manually. Keep package-lock.json committed and preserve bundled third-party license notices. Python's local server is not used in production.
+
+Wait for the Git-connected build and deployment to succeed, then open the production address in a private browser window. Complete the checks in VALIDATION.md. An enabled address or a successful earlier manual deployment does not prove the latest application build is live.
+
+The app footer links to the GitHub repository. If that repository is private, grant evaluators access. GitHub's Code menu provides a source ZIP download; after extracting it, restore dependencies and OCR assets with `npm ci` and `npm run build`.
+
+Commit and push later changes to the connected branch to trigger another build. A hosting build-environment initialization delay happens before application code runs; changing comparison logic will not fix that stage.
