@@ -1,0 +1,15 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {WARNING,evaluate,parseManifest,volumeMl} from '../dist/engine.mjs';
+const expected={brand:"Stone's Throw",type:'Bourbon Whiskey',abv:'45',volume:'750 mL',producer:'Example Distillery, Louisville, KY'};
+const text=`STONE’S THROW\nBourbon Whiskey\n45% Alc./Vol. (90 Proof)\n0.75 L\nExample Distillery, Louisville, KY\n${WARNING}`;
+const row=(t,field,conf=100)=>evaluate(t,expected,conf).rows.find(r=>r.field===field);
+test('normalizes brand typography without accepting a substring',()=>{assert.equal(row(text,'brand').status,'match');assert.equal(row(text.replace('THROW','THROWBACK'),'brand').status,'review');});
+test('ABV numerical equivalence and mismatch',()=>{assert.equal(row(text.replace('45%','45.0%'),'abv').status,'match');assert.equal(row(text.replace('45%','40%'),'abv').status,'mismatch');});
+test('proof alone cannot stand in for ABV',()=>assert.equal(row(text.replace('45% Alc./Vol.',''),'abv').status,'review'));
+test('volume equivalents',()=>{assert.equal(volumeMl('0.75 L'),750);assert.equal(row(text,'volume').status,'match');assert.equal(row(text.replace('0.75 L','700 mL'),'volume').status,'mismatch');});
+test('warning requires exact wording, punctuation and uppercase heading',()=>{assert.equal(row(text,'warning').status,'match');assert.equal(row(text.replace('GOVERNMENT WARNING','Government Warning'),'warning').status,'review');assert.equal(row(text.replace('machinery,','machinery'),'warning').status,'review');assert.equal(row(text.replace('birth defects','birth issues'),'warning').status,'review');});
+test('warning tolerates line wrapping',()=>assert.equal(row(text.replace('Surgeon General','Surgeon\nGeneral'),'warning').status,'match'));
+test('format always requires human review',()=>assert.equal(row(text,'format').status,'review'));
+test('low confidence does not produce matches',()=>assert.equal(evaluate(text,expected,50).matches,0));
+test('missing application data is not passed',()=>assert.equal(evaluate(text,{}).rows.find(x=>x.field==='abv').status,'review'));
+test('imported origin required',()=>assert.equal(evaluate(text,{...expected,imported:true}).rows.find(x=>x.field==='origin').status,'review'));
+test('manifest validates duplicates and types',()=>{assert.throws(()=>parseManifest('[{"filename":"a"},{"filename":"a"}]'));assert.throws(()=>parseManifest('[{"filename":"a","abv":45}]'));assert.equal(parseManifest('[{"filename":"a","abv":"45"}]').length,1);});
